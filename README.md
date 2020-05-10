@@ -9,9 +9,10 @@ Draw like [3Blue1Brown](https://www.youtube.com/watch?v=-qgreAUpPwM) .
 
 ## How to run
 * Clone the repo 
-* ```common-lisp 
+* 
+```common-lisp 
 (ql:quickload :epicycles)
-(epicycles::main "path/to/you/image.png")
+(epicycles::main "path/to/your/image.png")
 ```
 * Done! :) 
 
