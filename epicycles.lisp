@@ -74,6 +74,7 @@ Direction number of points surrounding a point
   (let (sx sy sdir dir contour x y p)
 	;;(declare (type integer sx sy x y p sdir dir))
 	(o:with-image-bounds (ymax xmax) image
+	  (decf ymax) (decf xmax) 
 	  ;; find first point and add it to contour
 	  (setf (values sy sx) (find-first-point image)
 			dir 2 sdir 2)			
