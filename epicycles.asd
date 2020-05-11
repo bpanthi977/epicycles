@@ -6,6 +6,6 @@
   :license  "GNU GPLv2"
   :version "0.0.1"
   :serial t
-  :depends-on (#:lispbuilder-sdl #:opticl)
+  :depends-on (#:lispbuilder-sdl #:opticl #:sdl-gui-utils)
   :components ((:file "package")
                (:file "epicycles")))

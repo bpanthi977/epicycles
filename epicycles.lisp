@@ -164,7 +164,7 @@ Direction number of points surrounding a point
   (let (end)
 	(loop for c in circles do
 	  (if (> (circle-radius c) 1) (draw-circle c origin))
-	  (setf end (* (circle-exact-radius c) (exp (complex 0 (circle-phase c)))))
+	  (setf end (* *scale* (circle-exact-radius c) (exp (complex 0 (circle-phase c)))))
 	  (sdl:draw-line (complex-point origin) (complex-point (incf origin end)) :color sdl:*red*)
 	  (update-phase c)
 		  finally (return origin))))
@@ -195,21 +195,53 @@ Direction number of points surrounding a point
 (defparameter *project-dir* (asdf:system-source-directory "epicycles"))
 (defparameter *default-file* (merge-pathnames "a.png" *project-dir*))
 
-(defun main(&optional (file *default-file*) (speed-factor 1))
-  (let* ((dft (read-image-and-caluate-dft file))
-		 (circles (create-circles-from-dft dft (length dft) speed-factor))
-		 (final-points nil))
+(defparameter *translation* #C(0 0))
+(defparameter *scale* 1)
+
+(defun scale (circles scale)
+  (mapcar #'(lambda (c)
+			  (setf (circle-radius c)
+					(round (* (circle-exact-radius c) scale))))
+		  circles))
+
+(defun main(&key (file *default-file*) (speed-factor 1) (type :contour))
+  (setf *translation* #C(200 200)
+		*scale* 1)
+  (let* ((image (o:read-image-file file))
+		 (dft (read-image-and-caluate-dft image type))
+		 (circles (create-circles-from-dft dft (* 2 (array-dimension image 0)) speed-factor))
+		 (final-points nil)
+		 (dds (make-instance 'gui:dragndropnscale
+							 :scale *scale* :translation *translation* :origin #C(0 0)
+							 :callback (lambda (tr s)
+										 (setf *translation* tr
+											   *scale* s)
+										 (scale circles *scale*)))))
 	;; sort circle to look nice
 	(setf circles (sort circles #'> :key #'circle-radius))
 	;; Initialize sdl 
 	(sdl:with-init ()
-	  (sdl:window 500 500)
+	  (sdl:window 1000 1000)
 	  (sdl:with-events ()
 		(:quit-event () t)
+		(:key-down-event (:key key)
+						 (case key
+						   (:sdl-key-q (sdl:push-quit-event))
+						   (:sdl-key-k (scale circles (setf *scale* (* *scale* 1.2))))
+						   (:sdl-key-l (scale circles (setf *scale* (/ *scale* 1.2))))))
+		(:mouse-motion-event
+		 (:x x :y y)
+		 (gui:mouse-motion dds x y))
+		(:mouse-button-down-event
+		 (:button button :x x :y y)
+		 (gui:mouse-button-down dds button x y))
+		(:mouse-button-up-event
+		 (:button button :x x :y y)
+		 (gui:mouse-button-up dds button x y))
 		(:idle ()
 			   (sdl:clear-display sdl:*white*)
 			   ;; draw circles and add the farend point 
-			   (push (complex-point (draw-circles-end-to-end circles #C(100 100)))
+			   (push (complex-point (draw-circles-end-to-end circles *translation*))
 					 final-points)
 			   ;; draw the farend points i.e. the points on the image
 			   (loop for p in (rest final-points)
@@ -217,7 +249,6 @@ Direction number of points surrounding a point
 					   (sdl:draw-line prevp p
 									  :color sdl:*blue*
 									  :aa t)
-					 (setf prevp p))
+					   (setf prevp p))
 			   
 			   (sdl:update-display))))))
-

@@ -2,4 +2,5 @@
 
 (defpackage #:epicycles
   (:use #:cl)
-  (:local-nicknames (:o :opticl)))
+  (:local-nicknames (:o :opticl)
+					(:gui :sdl-gui-utils)))
