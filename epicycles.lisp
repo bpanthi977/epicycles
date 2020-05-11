@@ -119,18 +119,86 @@ Direction number of points surrounding a point
 		(incf i)))
 	data))
 
+(defun find-1-points (image)
+  "Returns array of all white points `#C(x,y)' in image"
+  (let (points (count 0))
+	(declare (type o:1-bit-gray-image image))
+	(o:do-pixels (i j) image
+	  (when (= (o:pixel image i j) 1)
+		(incf count)
+		(push (complex j i) points)))
+	(make-array count :element-type 'complex :initial-contents points)))
 
-(defun read-image-and-caluate-dft (file)
-  (let ((im (o:read-image-file file))
-		data)
+(defun find-nearest-point (image y0 x0)
+  "Find the 1-point nearest to given (y0,x0) point"
+  (macrolet ((pixel-check ()
+			   `(when (= 1 (o:pixel image y x))
+				  (setf (o:pixel image y x) 0)
+				  (return-from find-nearest-point (values y x)))))
+	(o:with-image-bounds (ymax xmax) image
+	  (declare (type integer ymax xmax))
+	  (loop for s integer from 2 to (max x0 y0 (- ymax y0) (- xmax x0)) by 2
+			with x integer = 0 
+			with y integer = 0 do 
+			  ;; top row 
+			  (setf y (- y0 (1- s)))
+			  (when (>= y 0) 
+				(loop for x from (max 0 (- x0 (1- s))) below (min xmax (+ x0 s)) do
+				  (pixel-check)))
+			  ;; right column
+			  (setf x (+ x0 (1- s)))
+			  (when (< x xmax)
+				(loop for y from (max 0(- y0 (1- s))) below (min ymax (+ y0 s)) do
+				  (pixel-check)))
+			  ;; bottom column
+			  (setf y (+ y0 (1- s)))
+			  (when (< y ymax)
+				(loop for x from (min (1- xmax) (+ x0 (1- s))) downto (max 0 (- x0 (1- s))) do
+				  (pixel-check)))
+			  ;; left column
+			  (setf x (- x0 (1- s)))
+			  (when (>= x 0)
+				(loop for y from (min (1- ymax) (+ y0 (1- s))) downto (max 0 (- y0 (1- s))) do
+				  (pixel-check)))))))
+
+(defun wall-all-points (image)
+  "Returns array of all points #C(x,y) in image, arranged in a path"
+  (let ((points (make-array 1 :element-type 'complex
+							  :initial-element  #C(0 1)
+							  :fill-pointer t))
+		x y (count 0))
+	(setf (values y x) (find-first-point image))
+	(when (and x y)
+	  (vector-push-extend (complex x y) points)
+	  (incf count)
+	  (loop do
+		(setf (values y x) (find-nearest-point image y x))
+		(if x
+			(vector-push-extend (complex x y) points)
+			(return))
+		(incf count)))
+	(make-array (length points)
+				:element-type 'complex
+				:displaced-to points)))
+
+(defun read-image-and-caluate-dft (image type)
+  (let (data)
 	;; change to 8 bit gray i.e. average out the rgb values
-	(setf im (o:coerce-image im 'o:8-bit-gray-image))
+	(setf image (o:coerce-image image 'o:8-bit-gray-image))
+	(setf image (o:blur-image image))
+	(setf image (o:edge-detect-image image))
 	;; threshold to 1-bit image i.e values above threshold are 1 and below are zero
-	(setf im (o:threshold-image im 127))
+	(setf image (o:threshold-image image 20))
 	;; change 1 to 0, and 0 to 1 
-	(setf im (invert im))
-	;; get contour points as complex numbers
-	(setf data (points-to-complex (find-contours im)))
+	;;(setf image (invert image))
+	(ecase type
+	  (:contour 
+	   ;; get contour points as complex numbers
+	   (setf data (points-to-complex (find-contours image))))
+	  (:direct
+	   (setf data (find-1-points image)))
+	  (:walk-all
+	   (setf data (wall-all-points image))))
 	;; return dft
 	(dft data)))
 
