@@ -139,7 +139,7 @@ Direction number of points surrounding a point
 	  (declare (type integer ymax xmax))
 	  (loop for s integer from 2 to (max x0 y0 (- ymax y0) (- xmax x0)) by 2
 			with x integer = 0 
-			with y integer = 0 do 
+			with y integer = 0 do
 			  ;; top row 
 			  (setf y (- y0 (1- s)))
 			  (when (>= y 0) 
@@ -150,7 +150,7 @@ Direction number of points surrounding a point
 			  (when (< x xmax)
 				(loop for y from (max 0(- y0 (1- s))) below (min ymax (+ y0 s)) do
 				  (pixel-check)))
-			  ;; bottom column
+			  ;; bottom row
 			  (setf y (+ y0 (1- s)))
 			  (when (< y ymax)
 				(loop for x from (min (1- xmax) (+ x0 (1- s))) downto (max 0 (- x0 (1- s))) do
@@ -168,6 +168,7 @@ Direction number of points surrounding a point
 							  :fill-pointer t))
 		x y (count 0))
 	(setf (values y x) (find-first-point image))
+	(setf (o:pixel image y x) 0)
 	(when (and x y)
 	  (vector-push-extend (complex x y) points)
 	  (incf count)
@@ -273,8 +274,9 @@ Direction number of points surrounding a point
 		  circles))
 
 (defun main(&key (file *default-file*) (speed-factor 1) (type :contour))
+(defun main(&key (file *default-file*) (speed-factor 1) (type :contour) (scale 1))
   (setf *translation* #C(200 200)
-		*scale* 1)
+		*scale* scale)
   (let* ((image (o:read-image-file file))
 		 (dft (read-image-and-caluate-dft image type))
 		 (circles (create-circles-from-dft dft (* 2 (array-dimension image 0)) speed-factor))
