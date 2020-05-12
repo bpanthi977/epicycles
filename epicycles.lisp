@@ -8,16 +8,43 @@
 
 ;; Defintion Method / Bruteforce method
 ;; TODO : USE FFT 
-(defun dft (data &optional (max 1000))
+(defun dft (data)
   "Compute dft of array of numbers (complex/real) and return array of complex"
-  (let ((transform (make-array (min max (length data)))))
-	(loop with N = (min max (length data))
+  (let ((transform (make-array (length data))))
+	(loop with N = (length data)
 		  for |n| from  0 to (1- N) do
 			(setf (aref transform |n|)
 				  (loop for k from 0 to (1- N)
 						with coeff = (* -2 pi #C(0 1) |n| (/ N))
 						summing (* (aref data k) (exp (* coeff k))))))
 	transform))
+
+(defun power-of-two (x)
+  (and (> x 0)
+       (zerop (logand x (1- x)))
+       (1- (integer-length x))))
+
+(defun pads (n)
+  "Number to add to n to make is a power of 2"
+  (if (= n 1)
+	  1
+	  (if (power-of-two n)
+		  0
+		  (- (expt 2 (integer-length n)) n))))
+
+(defun pad-with-zeros (data)
+  (let ((pads (pads (length data))))
+	(unless (= 0 pads)
+	  (loop with new-data = (make-array (+ (length data) pads)
+										:element-type 'complex
+										:initial-element #C(0.0 0.0))
+			for i from 0 to (1- (length new-data)) do
+			  (setf (aref new-data i) (aref data (mod i (length data))))
+			finally (setf data new-data)))							 
+	data))
+
+(defun fft (data)
+  (bordeaux-fft:sfft (pad-with-zeros data)))
 
 ;;
 ;;; Contour finding from an image file 
@@ -161,7 +188,7 @@ Direction number of points surrounding a point
 				(loop for y from (min (1- ymax) (+ y0 (1- s))) downto (max 0 (- y0 (1- s))) do
 				  (pixel-check)))))))
 
-(defun wall-all-points (image)
+(defun walk-all-points (image)
   "Returns array of all points #C(x,y) in image, arranged in a path"
   (let ((points (make-array 1 :element-type 'complex
 							  :initial-element  #C(0 1)
@@ -182,7 +209,12 @@ Direction number of points surrounding a point
 				:element-type 'complex
 				:displaced-to points)))
 
-(defun read-image-and-caluate-dft (image type)
+(defun center-data (data)
+  (let ((avg (/ (reduce #'+ data) (length data))))
+	(loop for i from 0 to (1- (length data)) do
+	  (decf (aref data i) avg))))
+
+(defun read-image-and-caluate-dft (image type fft)
   (let (data)
 	;; change to 8 bit gray i.e. average out the rgb values
 	(setf image (o:coerce-image image 'o:8-bit-gray-image))
@@ -190,8 +222,6 @@ Direction number of points surrounding a point
 	(setf image (o:edge-detect-image image))
 	;; threshold to 1-bit image i.e values above threshold are 1 and below are zero
 	(setf image (o:threshold-image image 20))
-	;; change 1 to 0, and 0 to 1 
-	;;(setf image (invert image))
 	(ecase type
 	  (:contour 
 	   ;; get contour points as complex numbers
@@ -199,9 +229,12 @@ Direction number of points surrounding a point
 	  (:direct
 	   (setf data (find-1-points image)))
 	  (:walk-all
-	   (setf data (wall-all-points image))))
+	   (setf data (walk-all-points image))))
+	(center-data data)
 	;; return dft
-	(dft data)))
+	(if fft
+		(fft data)
+		(dft data))))
 
 ;;
 ;;; Circle Drawing mechanisms
@@ -273,32 +306,46 @@ Direction number of points surrounding a point
 					(round (* (circle-exact-radius c) scale))))
 		  circles))
 
-(defun main(&key (file *default-file*) (speed-factor 1) (type :contour))
-(defun main(&key (file *default-file*) (speed-factor 1) (type :contour) (scale 1))
-  (setf *translation* #C(200 200)
-		*scale* scale)
+(defun main(&key (file *default-file*) (speed-factor 1) (type :contour) (scale 1) (fft t))
+  (setf *translation* #C(500 500)
+		*scale* 1)
   (let* ((image (o:read-image-file file))
-		 (dft (read-image-and-caluate-dft image type))
-		 (circles (create-circles-from-dft dft (* 2 (array-dimension image 0)) speed-factor))
+		 (dft (read-image-and-caluate-dft image type fft))
+		 (circles (create-circles-from-dft dft (* 5 (/ scale) (array-dimension image 0)) speed-factor))
 		 (final-points nil)
 		 (dds (make-instance 'gui:dragndropnscale
 							 :scale *scale* :translation *translation* :origin #C(0 0)
 							 :callback (lambda (tr s)
 										 (setf *translation* tr
 											   *scale* s)
-										 (scale circles *scale*)))))
+										 (scale circles *scale*))))
+		 scale-widget)
 	;; sort circle to look nice
-	(setf circles (sort circles #'> :key #'circle-radius))
+	(setf circles (sort circles #'> :key #'circle-radius))	
 	;; Initialize sdl 
 	(sdl:with-init ()
 	  (sdl:window 1000 1000)
+	  (sdl:enable-unicode)
+	  (sdl:initialise-default-font)
+	  (setf sdl:*default-color* sdl:*black*)
 	  (sdl:with-events ()
 		(:quit-event () t)
-		(:key-down-event (:key key)
+		(:key-down-event (:key key :unicode code)
 						 (case key
 						   (:sdl-key-q (sdl:push-quit-event))
 						   (:sdl-key-k (scale circles (setf *scale* (* *scale* 1.2))))
-						   (:sdl-key-l (scale circles (setf *scale* (/ *scale* 1.2))))))
+						   (:sdl-key-l (scale circles (setf *scale* (/ *scale* 1.2))))
+						   (t (if (not scale-widget)
+								  (setf scale-widget (make-instance 'gui::number-entry
+																	:value *scale*
+																	:x (sdl:mouse-x)
+																	:y (sdl:mouse-y)))
+								  (progn
+									(let ((char (code-char code)))
+									  (if (or (char= char #\Return) (char= char #\Esc))
+										  (progn (scale circles (setf *scale* (gui::value scale-widget))) 
+												 (setf scale-widget nil))
+										  (gui::key-down scale-widget :char char))))))))
 		(:mouse-motion-event
 		 (:x x :y y)
 		 (gui:mouse-motion dds x y))
@@ -320,5 +367,7 @@ Direction number of points surrounding a point
 									  :color sdl:*blue*
 									  :aa t)
 					   (setf prevp p))
-			   
+			   ;; widgets
+			   (if scale-widget
+				   (gui::draw scale-widget))
 			   (sdl:update-display))))))

@@ -58,17 +58,25 @@
   image)
 
 (defun test ()
-  (with-tmp-image (im (read-image "E:/Dev/Python/friends/images/Binod Ghale.png")) ;;"~/Dev/Python/Epicycles/ashvin.png"))
+  (with-tmp-image (im (read-image "E:/tmp/test.png")) ;;"~/Dev/Python/Epicycles/ashvin.png"))
 				  (setf im (o:coerce-image im 'o:8-bit-gray-image))
 				  ;;(setf im (o:threshold-image im 127))
 				  ;;(setf im (invert im))
 				  ;; (o:with-image-bounds (y x) im 
 				  ;; 	(setf im (draw-contours (find-contours im) y x)))
 				  ;;(setf im (threshold-to-8big im))
+				  ;; (o:do-pixels (i j) im
+				  ;; 	(setf (o:pixel im i j) (- 255 (o:pixel im i j))))
 				  (setf im (o:blur-image im))
 				  (setf im (o:edge-detect-image im))
-				  (setf im (invert (o:threshold-image im 20)))
+				  (setf im (o:threshold-image im 20))
 				  (threshold-to-8big im)))
 
+(defun non-zeros (image)
+  (let ((list nil))
+	(o:do-pixels (i j) image
+	  (if (= 1 (o:pixel image i j))
+		  (push (list i j) list)))
+	list))
 
-				  
+		
