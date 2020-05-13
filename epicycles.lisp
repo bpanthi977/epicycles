@@ -20,6 +20,7 @@
 	transform))
 
 (defun power-of-two (x)
+  "Is x a power of two number"
   (and (> x 0)
        (zerop (logand x (1- x)))
        (1- (integer-length x))))
@@ -32,7 +33,7 @@
 		  0
 		  (- (expt 2 (integer-length n)) n))))
 
-(defun pad-with-zeros (data)
+(defun pad-data (data)
   (let ((pads (pads (length data))))
 	(unless (= 0 pads)
 	  (loop with new-data = (make-array (+ (length data) pads)
@@ -44,7 +45,7 @@
 	data))
 
 (defun fft (data)
-  (bordeaux-fft:sfft (pad-with-zeros data)))
+  (bordeaux-fft:sfft (pad-data data)))
 
 ;;
 ;;; Contour finding from an image file 
@@ -314,9 +315,12 @@ Direction number of points surrounding a point
 		 (circles (create-circles-from-dft dft (* 5 (/ scale) (array-dimension image 0)) speed-factor))
 		 (final-points nil)
 		 (dds (make-instance 'gui:dragndropnscale
-							 :scale *scale* :translation *translation* :origin #C(0 0)
+							 :scale *scale*
+							 :translation (sdl:point :x (realpart *translation*)
+													 :y (imagpart *translation*))
+							 :origin (sdl:point :x 0 :y 0)
 							 :callback (lambda (tr s)
-										 (setf *translation* tr
+										 (setf *translation* (complex (sdl:x tr) (sdl:y tr))
 											   *scale* s)
 										 (scale circles *scale*))))
 		 scale-widget)
@@ -339,7 +343,8 @@ Direction number of points surrounding a point
 								  (setf scale-widget (make-instance 'gui::number-entry
 																	:value *scale*
 																	:x (sdl:mouse-x)
-																	:y (sdl:mouse-y)))
+																	:y (sdl:mouse-y)
+																	:selected-range t))																	
 								  (progn
 									(let ((char (code-char code)))
 									  (if (or (char= char #\Return) (char= char #\Esc))
@@ -370,4 +375,6 @@ Direction number of points surrounding a point
 			   ;; widgets
 			   (if scale-widget
 				   (gui::draw scale-widget))
+
+											  
 			   (sdl:update-display))))))
